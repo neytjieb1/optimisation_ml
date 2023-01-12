@@ -107,7 +107,33 @@ def mlpk(x, W): #W = [Wk, ..., W3, W2, W1]
 
 
 #Note: W is passed back in the form: W = [Wk, ..., W3, W2, W1] 
+
 if __name__ == '__main__':
+
+    from sklearn import datasets
+    dataset = datasets.fetch_california_housing(as_frame = True)
+
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.model_selection import train_test_split
+    import numpy as np
+    np.random.seed(1)
+
+    dataset.frame_normalized = StandardScaler().fit_transform(dataset.frame)
+    # We drop Longitude as well since Latitude has enough information
+    X = dataset.frame_normalized[:,0:len(dataset.frame.columns) - 2]
+    y = dataset.frame_normalized[:,len(dataset.frame.columns) - 1]
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 9)
+    X_train = np.insert(X_train, 0, np.ones(X_train.shape[0]), axis=1)
+    X_test = np.insert(X_test, 0, np.ones(X_test.shape[0]), axis=1)
+
+    n, d = X_train.shape
+
+
+
+
+
+if __name__ == '__write__':
     np.random.seed(62394)
     #Run checks from 2-10 layers
     l = 10
