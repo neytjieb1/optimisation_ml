@@ -2,6 +2,6 @@ Data/
 __pycache__/
 *lab*
 *.txt
-scraps/
+/scraps/
 scraps.ipynb
 .gitattributes
