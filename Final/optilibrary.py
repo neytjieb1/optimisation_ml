@@ -1,6 +1,7 @@
 def importData(p=0.2):
     from sklearn import datasets
     dataset = datasets.fetch_california_housing(as_frame = True)
+    cols = dataset.frame.columns
     from sklearn.preprocessing import StandardScaler
     from sklearn.model_selection import train_test_split
     import numpy as np
@@ -15,7 +16,7 @@ def importData(p=0.2):
     X_train = np.insert(X_train, 0, np.ones(X_train.shape[0]), axis=1)
     X_test = np.insert(X_test, 0, np.ones(X_test.shape[0]), axis=1)
 
-    return X_train, y_train, X_test, y_test
+    return X_train, y_train, X_test, y_test, cols
 
 from scipy.linalg import norm
 import numpy as np
@@ -476,6 +477,39 @@ def CondGD(f, gradf, R, pick_theta_rule, extr_pt_rule, argminrule, dim, maxit=50
         print('Cond: Not found')
     return np.array(x), np.array(errs)
 
+#Part IV
 
+#Part V
+SoftThresh = lambda x, tau: np.sign(x) * np.maximum(np.abs(x)-tau, 0.0)
+GD_loss = lambda A,x, y: np.linalg.norm(A.dot(x) - y, 2) ** 2 / (2. * A.shape[0]) 
+GD_grad = lambda A, x, y: (A.T).dot(A.dot(x) - y)*(1/A.shape[0])
 
+ridge_loss = lambda A, x, y, lbda: GD_loss(A,x,y) + lbda* np.linalg.norm(x,2) ** 2 / 2.
+ridge_grad = lambda A, x, y, lmbd: GD_grad(A,x,y) + 1*lmbd*x
+
+def GD(X, y, niter, step=0.001, lmbd=0):
+    n, d = X.shape
+    L = np.linalg.norm(X, 2) ** 2 / n + lmbd
+    step = 1/L
+    theta = np.ones(X.shape[1])
+    loss_evol = np.zeros(niter)
+    for i in range(niter):
+        error_k = np.dot(X, theta) - y
+        g = ridge_grad(X, theta, y, lmbd)
+        theta = theta - (1/L)*g
+        loss_evol[i] = ridge_loss(X, theta, y, lmbd)
+    return theta, loss_evol
+
+def ISTA(A, y, lbda, step, niter):
+    (n, d) = A.shape
+    x = np.ones(d)
+    
+    Func = [GD_loss(A,x, y)]
+
+    for k in range(niter):
+        g = GD_grad(A,x, y) #smooth part
+        x = SoftThresh(x - step*g, step*lbda)
+        Func.append(GD_loss(A,x,y))
+
+    return x, Func
 
