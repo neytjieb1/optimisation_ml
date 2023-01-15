@@ -484,20 +484,20 @@ SoftThresh = lambda x, tau: np.sign(x) * np.maximum(np.abs(x)-tau, 0.0)
 GD_loss = lambda A,x, y: np.linalg.norm(A.dot(x) - y, 2) ** 2 / (2. * A.shape[0]) 
 GD_grad = lambda A, x, y: (A.T).dot(A.dot(x) - y)*(1/A.shape[0])
 
-ridge_loss = lambda A, x, y, lbda: GD_loss(A,x,y) + lbda* np.linalg.norm(x,2) ** 2 / 2.
+# ridge_loss = lambda A, x, y, lbda: GD_loss(A,x,y) + lbda* np.linalg.norm(x,2) ** 2 / 2.
 ridge_grad = lambda A, x, y, lmbd: GD_grad(A,x,y) + 1*lmbd*x
 
-def GD(X, y, niter, step=0.001, lmbd=0):
-    n, d = X.shape
-    L = np.linalg.norm(X, 2) ** 2 / n + lmbd
-    step = 1/L
+def GD_ridge(X, y, niter, step=0.001, lmbd=0):
+    # n, d = X.shape
+    # L = (np.linalg.norm(X, 2) ** 2 / n) + lmbd
+    # step = 1/L
     theta = np.ones(X.shape[1])
     loss_evol = np.zeros(niter)
     for i in range(niter):
-        error_k = np.dot(X, theta) - y
+        # error_k = np.dot(X, theta) - y
         g = ridge_grad(X, theta, y, lmbd)
-        theta = theta - (1/L)*g
-        loss_evol[i] = ridge_loss(X, theta, y, lmbd)
+        theta = theta - step*g
+        loss_evol[i] = GD_loss(X, theta, y)
     return theta, loss_evol
 
 def ISTA(A, y, lbda, step, niter):
@@ -512,4 +512,123 @@ def ISTA(A, y, lbda, step, niter):
         Func.append(GD_loss(A,x,y))
 
     return x, Func
+
+
+#Part VI
+loss_rcd = lambda A, x, y, lbda: norm(A.dot(x) - y) ** 2 / (2. * A.shape[0])+ lbda * norm(x,1)
+grad_rcd = lambda A, x, y, lbda: A.T.dot(A.dot(x) - y) / A.shape[0]
+
+# Randomized coordinate descent for the LASSO problem
+def rcd_lasso(A,y,lbda,ncoord=1,nits=500, step=0.001): 
+    objvals = []
+    sparsity = []
+    
+    # Initial iterate
+    n,d = A.shape
+    x = np.ones(d)
+    
+    # Lipschitz constants
+    # Lvals = norm(A.T.dot(A), axis=0)
+    objvals.append( loss_rcd(A,x, y, lbda)) # Initial objective value
+    sparsity.append(np.count_nonzero(x)/d) # Number of nonzero coefficients
+
+    for k in range(nits):
+        g = grad_rcd(A, x, y, lbda) # Gradient for the smooth part of the objective
+        # g = g / np.linalg.norm(g)
+
+        jk = np.random.choice(d,ncoord,replace=False) # Uniform draw without replacement
+        # Compute the new iterate by changing only one component
+        for j in jk:
+            stepj = step
+            valj = x[j]-stepj*g[j]
+            threshold = stepj*lbda
+            x[j] = SoftThresh(valj, threshold)
+
+        #Update
+        objvals.append(loss_rcd(A, x, y, lbda) )
+        sparsity.append(np.count_nonzero(x)/d)
+        g = grad_rcd(A, x, y, lbda)
+          
+    return x, np.array(objvals), np.array(sparsity)
+
+def stochRCD(A, y, nbatch=1, lbda=0, ncoords=1, n_iter=1000, with_replace=False):    
+    # Lipschitz constant
+    Lvals = norm(np.matmul(A.T,A),axis=0)
+    L = np.min(Lvals)
+
+    n, d = A.shape
+    th = np.ones(d)/d
+    
+    loss_evol = [loss_rcd(A, th, y, lbda)]
+    sparsity = [np.count_nonzero(th)/d]
+
+    k=0
+    e = 1
+    while (k < n_iter and norm(th,2) < 10**100):
+        # SG: batch indices
+        ik = np.random.choice(n,nbatch,replace=with_replace)# Batch gradient
+        sg = np.zeros(d)
+        for j in range(nbatch):
+            gradi = (A[j].dot(th) - y[j]) * A[j] #+ lbda*x <-- l2 norm case
+            sg = sg + gradi
+        sg = (1/nbatch)*sg
+        sg = sg / norm(sg)
+
+        #RCD: coordinates
+        jk = np.random.choice(d,ncoords,replace=with_replace) 
+        for j in jk:
+            # stepj =  1/Lvals[j] * (1/(k+1))
+            stepj =  1/L * (1/(k+1))
+            valj = th[j] - stepj * sg[j]
+            threshold = stepj*lbda
+            th[j] = SoftThresh(valj, threshold)
+        
+        obj = loss_rcd(A, th, y, lbda)
+        k += 1
+        # Plot quantities of interest at the end of every epoch only
+        if k*nbatch - e*n >= 0:
+            print("Epoch", e, end='\r')
+            e+=1
+            loss_evol.append(obj)
+            sparsity.append(np.count_nonzero(th)/d)
+
+
+    loss_evol.append(obj)
+    # print('')
+
+    return th, np.array(loss_evol), np.array(sparsity)
+
+
+#Part VII
+def heavy_ball(X, y, niter, step, gamma):
+    theta = np.ones(X.shape[1])
+    loss_evol = np.zeros(niter)
+    
+    m = GD_grad(X, theta, y) #Initial momentum
+    for i in range(niter):
+        m = (1-gamma)*GD_grad(X, theta, y) + (gamma)*m
+        theta = theta - step*m
+        loss_evol[i] = GD_loss(X, theta, y)
+    
+    return theta, loss_evol
+
+def gradp(x, p):
+    x = np.abs(x)
+    y = x**(p-1)
+    z = norm(x, p)**(1-p)
+    return z*y
+
+
+def GD_nonconxev(X, y, p, niter, step, lmbd):
+    loss_evol = np.zeros(niter)
+    grad_evol = np.zeros((niter, X.shape[1]))
+    thstar = np.ones(X.shape[1])
+    for i in range(niter):
+        g = ridge_grad(X, thstar, y, 0) + lmbd*gradp(thstar, p)
+        thstar = thstar - step * g
+
+        loss_evol[i] = norm(X.dot(thstar) - y)**2 / (2*X.shape[0])
+        grad_evol[i,:] = g
+    
+    return thstar, loss_evol, grad_evol
 
